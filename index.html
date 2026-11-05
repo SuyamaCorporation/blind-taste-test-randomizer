@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ブラインド食体験ランダマイザー</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *:focus-visible { outline: 2px solid #f59e0b; outline-offset: 2px; }
+  .fade-in { animation: fadeIn 0.5s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .reveal-anim { animation: revealPop 0.6s cubic-bezier(0.175,0.885,0.32,1.275); }
+  @keyframes revealPop { from { opacity:0; transform:scale(0.5); } to { opacity:1; transform:scale(1); } }
+  .score-bar { transition: width 0.8s ease; }
+</style>
+</head>
+<body class="bg-gradient-to-br from-amber-50 to-orange-100 min-h-screen p-4">
+
+<div class="max-w-3xl mx-auto">
+  <header class="text-center py-6">
+    <h1 class="text-3xl font-bold text-amber-800">🍫 ブラインド食体験ランダマイザー</h1>
+    <p class="text-amber-600 mt-1">試料をシャッフルして公平なブラインドテストを開催</p>
+  </header>
+
+  <!-- Phase: Setup -->
+  <div id="phase-setup" class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+    <h2 class="text-xl font-bold text-gray-700 mb-4">🧪 テストセットアップ</h2>
+
+    <!-- Presets -->
+    <div class="mb-4">
+      <p class="text-sm font-semibold text-gray-500 mb-2">テンプレートから選ぶ</p>
+      <div class="flex flex-wrap gap-2" role="group" aria-label="プリセット選択">
+        <button onclick="applyPreset('cola')" class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200 transition">コーラ3種</button>
+        <button onclick="applyPreset('beer')" class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm hover:bg-yellow-200 transition">ビール4種</button>
+        <button onclick="applyPreset('coffee')" class="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm hover:bg-amber-200 transition">コーヒー3種</button>
+        <button onclick="applyPreset('choco')" class="px-3 py-1 bg-brown-100 text-orange-700 rounded-full text-sm hover:bg-orange-200 transition">チョコ4種</button>
+        <button onclick="applyPreset('water')" class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200 transition">ミネラルウォーター3種</button>
+      </div>
+    </div>
+
+    <!-- Samples Input -->
+    <div class="mb-4">
+      <label class="block text-sm font-semibold text-gray-600 mb-2">試料名（1行1つ）</label>
+      <textarea id="samples-input" rows="4" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent" placeholder="コカ・コーラ&#10;ペプシ&#10;ゼロコーラ" aria-label="試料名入力"></textarea>
+    </div>
+
+    <!-- Participants Input -->
+    <div class="mb-4">
+      <label class="block text-sm font-semibold text-gray-600 mb-2">参加者名（1行1人）</label>
+      <textarea id="participants-input" rows="3" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent" placeholder="田中&#10;佐藤&#10;鈴木" aria-label="参加者名入力"></textarea>
+    </div>
+
+    <button onclick="startTest()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl transition text-lg">
+      🎲 テスト開始！
+    </button>
+    <p id="setup-error" class="text-red-500 text-sm mt-2 hidden" role="alert"></p>
+  </div>
+
+  <!-- Phase: Assign Numbers -->
+  <div id="phase-numbers" class="hidden bg-white rounded-2xl shadow-lg p-6 mb-4">
+    <h2 class="text-xl font-bold text-gray-700 mb-2">🔢 番号割り当て完了</h2>
+    <p class="text-sm text-gray-500 mb-4">試料に番号を割り当てました。参加者には番号のみ伝えてください。</p>
+    <div id="number-assignment" class="mb-4"></div>
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+      <p class="text-xs text-amber-700 font-semibold">⚠ 試料名は正解発表まで非公開にしてください</p>
+    </div>
+    <button onclick="startGuessing()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition">
+      ✍️ 参加者の予測入力へ
+    </button>
+  </div>
+
+  <!-- Phase: Guessing -->
+  <div id="phase-guessing" class="hidden bg-white rounded-2xl shadow-lg p-6 mb-4">
+    <h2 class="text-xl font-bold text-gray-700 mb-2">🤔 予測入力</h2>
+    <p class="text-sm text-gray-500 mb-4">各参加者が「番号→試料名」を予測してください。</p>
+    <div id="guess-forms"></div>
+    <button onclick="revealAnswers()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition mt-4 text-lg">
+      🎉 正解発表！
+    </button>
+  </div>
+
+  <!-- Phase: Reveal -->
+  <div id="phase-reveal" class="hidden bg-white rounded-2xl shadow-lg p-6 mb-4">
+    <h2 class="text-xl font-bold text-gray-700 mb-4">🎊 正解発表</h2>
+    <div id="reveal-sequence"></div>
+    <div id="reveal-scores" class="hidden mt-6">
+      <h3 class="text-lg font-bold text-gray-700 mb-3">🏆 ランキング</h3>
+      <div id="score-list"></div>
+      <button onclick="saveAndReset()" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition mt-4">
+        🔄 新しいテストを始める
+      </button>
+    </div>
+  </div>
+
+  <!-- Past Results -->
+  <div id="past-results" class="bg-white rounded-2xl shadow-lg p-6 mb-4 hidden">
+    <h2 class="text-xl font-bold text-gray-700 mb-3">📊 過去のテスト結果</h2>
+    <div id="past-list"></div>
+    <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-600 mt-3 underline">履歴を削除</button>
+  </div>
+</div>
+
+<script>
+function htmlEscape(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+const PRESETS = {
+  cola: ['コカ・コーラ','ペプシ・コーラ','コカ・コーラゼロ'],
+  beer: ['アサヒスーパードライ','キリン一番搾り','サッポロ黒ラベル','エビスビール'],
+  coffee: ['スターバックス ブレンド','ドトール ブレンド','コンビニコーヒー'],
+  choco: ['明治ミルクチョコ','ゴディバ','モロゾフ','ロイズ'],
+  water: ['エビアン','南アルプスの天然水','クリスタルカイザー'],
+};
+
+let currentTest = {};
+let revealIndex = 0;
+
+function applyPreset(key) {
+  document.getElementById('samples-input').value = PRESETS[key].join('\n');
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function startTest() {
+  const samplesRaw = document.getElementById('samples-input').value.trim();
+  const participantsRaw = document.getElementById('participants-input').value.trim();
+  const errEl = document.getElementById('setup-error');
+
+  const samples = samplesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  const participants = participantsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (samples.length < 2) { errEl.textContent = '試料は2種類以上入力してください。'; errEl.classList.remove('hidden'); return; }
+  if (participants.length < 1) { errEl.textContent = '参加者を1人以上入力してください。'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+
+  const shuffled = shuffle(samples);
+  currentTest = {
+    samples,
+    shuffled,
+    participants,
+    guesses: {},
+    date: new Date().toLocaleString('ja-JP'),
+  };
+
+  const assignEl = document.getElementById('number-assignment');
+  assignEl.innerHTML = shuffled.map((s, i) =>
+    `<div class="flex items-center gap-3 py-2 border-b border-gray-100">
+      <span class="w-10 h-10 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-lg">${i+1}</span>
+      <span class="text-gray-400 text-sm italic">（試料名非公開）</span>
+    </div>`
+  ).join('');
+
+  document.getElementById('phase-setup').classList.add('hidden');
+  document.getElementById('phase-numbers').classList.remove('hidden');
+}
+
+function startGuessing() {
+  const forms = document.getElementById('guess-forms');
+  forms.innerHTML = currentTest.participants.map(p => `
+    <div class="mb-5 p-4 bg-gray-50 rounded-xl">
+      <p class="font-bold text-gray-700 mb-3">${htmlEscape(p)} さんの予測</p>
+      ${currentTest.shuffled.map((_, i) => `
+        <div class="flex items-center gap-3 mb-2">
+          <span class="w-8 h-8 bg-amber-100 text-amber-800 rounded-full flex items-center justify-center font-bold text-sm shrink-0">${i+1}</span>
+          <span class="text-gray-500 text-sm mr-1">→</span>
+          <select data-participant="${htmlEscape(p)}" data-num="${i+1}" class="flex-1 border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-400" aria-label="${htmlEscape(p)}の番号${i+1}の予測">
+            <option value="">選択してください</option>
+            ${currentTest.samples.map(s => `<option value="${htmlEscape(s)}">${htmlEscape(s)}</option>`).join('')}
+          </select>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  document.getElementById('phase-numbers').classList.add('hidden');
+  document.getElementById('phase-guessing').classList.remove('hidden');
+}
+
+function revealAnswers() {
+  const selects = document.querySelectorAll('#guess-forms select');
+  currentTest.guesses = {};
+
+  currentTest.participants.forEach(p => {
+    currentTest.guesses[p] = {};
+  });
+
+  selects.forEach(sel => {
+    const p = sel.dataset.participant;
+    const num = parseInt(sel.dataset.num);
+    currentTest.guesses[p][num] = sel.value;
+  });
+
+  document.getElementById('phase-guessing').classList.add('hidden');
+  document.getElementById('phase-reveal').classList.remove('hidden');
+
+  revealIndex = 0;
+  const seqEl = document.getElementById('reveal-sequence');
+  seqEl.innerHTML = '';
+  revealNext(seqEl);
+}
+
+function revealNext(seqEl) {
+  if (revealIndex >= currentTest.shuffled.length) {
+    setTimeout(showScores, 800);
+    return;
+  }
+
+  const num = revealIndex + 1;
+  const actual = currentTest.shuffled[revealIndex];
+
+  setTimeout(() => {
+    const div = document.createElement('div');
+    div.className = 'reveal-anim mb-3 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl';
+    div.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="w-12 h-12 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-xl shrink-0">${num}</span>
+        <div>
+          <p class="text-xs text-amber-500 font-semibold">番号 ${num} の正解は...</p>
+          <p class="text-2xl font-bold text-gray-800">🎯 ${htmlEscape(actual)}</p>
+        </div>
+      </div>
+    `;
+    seqEl.appendChild(div);
+    revealIndex++;
+    revealNext(seqEl);
+  }, 700);
+}
+
+function showScores() {
+  const scores = {};
+  currentTest.participants.forEach(p => { scores[p] = 0; });
+
+  currentTest.participants.forEach(p => {
+    currentTest.shuffled.forEach((actual, i) => {
+      const num = i + 1;
+      if (currentTest.guesses[p][num] === actual) scores[p]++;
+    });
+  });
+
+  const total = currentTest.shuffled.length;
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const medals = ['🥇','🥈','🥉'];
+
+  const scoreList = document.getElementById('score-list');
+  scoreList.innerHTML = sorted.map(([p, s], i) => `
+    <div class="flex items-center gap-3 mb-3 p-3 bg-gray-50 rounded-xl fade-in">
+      <span class="text-2xl">${medals[i] || '🏅'}</span>
+      <div class="flex-1">
+        <p class="font-bold text-gray-800">${htmlEscape(p)}</p>
+        <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
+          <div class="score-bar bg-amber-500 h-2 rounded-full" style="width: ${(s/total*100)}%"></div>
+        </div>
+      </div>
+      <span class="font-bold text-amber-600 text-lg">${s}/${total}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('reveal-scores').classList.remove('hidden');
+}
+
+function saveAndReset() {
+  const history = JSON.parse(localStorage.getItem('blind-test-history') || '[]');
+  const scores = {};
+  currentTest.participants.forEach(p => {
+    scores[p] = currentTest.shuffled.filter((actual, i) => currentTest.guesses[p][i+1] === actual).length;
+  });
+  history.unshift({ date: currentTest.date, samples: currentTest.samples, scores });
+  if (history.length > 10) history.pop();
+  localStorage.setItem('blind-test-history', JSON.stringify(history));
+
+  currentTest = {};
+  document.getElementById('phase-reveal').classList.add('hidden');
+  document.getElementById('phase-setup').classList.remove('hidden');
+  document.getElementById('samples-input').value = '';
+  document.getElementById('participants-input').value = '';
+  loadHistory();
+}
+
+function loadHistory() {
+  const history = JSON.parse(localStorage.getItem('blind-test-history') || '[]');
+  const pastEl = document.getElementById('past-results');
+  if (history.length === 0) { pastEl.classList.add('hidden'); return; }
+
+  pastEl.classList.remove('hidden');
+  document.getElementById('past-list').innerHTML = history.map(h => `
+    <div class="mb-3 p-3 border border-gray-200 rounded-lg text-sm">
+      <p class="text-xs text-gray-400">${htmlEscape(h.date)}</p>
+      <p class="font-semibold text-gray-700 mb-1">${h.samples.map(s => htmlEscape(s)).join(' vs ')}</p>
+      ${Object.entries(h.scores).map(([p, s]) => `<span class="inline-block bg-gray-100 text-gray-600 rounded px-2 py-0.5 mr-1">${htmlEscape(p)}: ${s}/${h.samples.length}</span>`).join('')}
+    </div>
+  `).join('');
+}
+
+function clearHistory() {
+  if (confirm('過去の結果をすべて削除しますか？')) {
+    localStorage.removeItem('blind-test-history');
+    loadHistory();
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
